@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: halyard-config
+  namespace: spinnaker
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 8Gi
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+ name: halyard-role
+ namespace: spinnaker
+rules:
+- apiGroups: [""]
+  resources: ["services", "secrets", "services/proxy", "pods/portforward"]
+  verbs: ["create", "delete", "deletecollection", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["apps", "extensions"]
+  resources: ["deployments"]
+  verbs: ["create", "delete", "deletecollection", "get", "list", "patch", "update", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+ name: halyard-role-binding
+ namespace: spinnaker
+roleRef:
+ apiGroup: rbac.authorization.k8s.io
+ kind: Role
+ name: halyard-role
+subjects:
+- namespace: spinnaker
+  kind: ServiceAccount
+  name: halyard-service-account
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: namespace-getter
+rules:
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+ name: halyard-namespace-getter
+roleRef:
+ apiGroup: rbac.authorization.k8s.io
+ kind: ClusterRole
+ name: namespace-getter
+subjects:
+- namespace: spinnaker
+  kind: ServiceAccount
+  name: halyard-service-account
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+ name: halyard-service-account
+ namespace: spinnaker
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: halyard-workstation
+  namespace: spinnaker
+spec:
+  restartPolicy: Never
+  serviceAccountName: halyard-service-account
+  containers:
+  - name: halyard
+    image: "gcr.io/spinnaker-marketplace/halyard:stable"
+    volumeMounts:
+    - name: config
+      mountPath: /home/spinnaker/.hal
+  volumes:
+  - name: config
+    persistentVolumeClaim:
+      claimName: halyard-config
+  securityContext:
+    fsGroup: 2000
